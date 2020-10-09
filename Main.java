@@ -1,4 +1,4 @@
-import java.util.Arrays;
+import java.util.Random;
 
 /**
  * This is a toy block cipher. It's not actually secure :)
@@ -7,15 +7,31 @@ public class Main {
     public static void main(String[] args) {
         // TODO
         String key = "1100001 0110101 1011010 0100011 0001001";
-
         String plaintext = "HelloHello~";
+        String initializationVector =
+            groupsOfSeven(randomInitializationVector(35));
+            // "0000000 0000000 0000000 0000000 0000000";
+
+
         System.out.println("Plaintext: " + plaintext);
+        System.out.println("Initialization vector: " + initializationVector);
+        System.out.println("");
 
-        String ciphertext = groupsOfSeven(encryptEcb(plaintext, key));
-        System.out.println("Encrypted: " + ciphertext);
+        System.out.println("=== Electronic Code Book mode ===");
+        String ecbCiphertext = groupsOfSeven(encryptEcb(plaintext, key));
+        System.out.println("Encrypted: " + ecbCiphertext);
+        String ecbPlaintext = decryptEcb(ecbCiphertext, key);
+        System.out.println("Decrypted: " + ecbPlaintext);
+        System.out.println("");
 
-        String plaintextAgain = decryptEcb(ciphertext, key);
-        System.out.println("Decrypted: " + plaintextAgain);
+        System.out.println("=== Cipher Block Chaining mode ===");
+        String cbcCiphertext =
+          groupsOfSeven(encryptCbc(plaintext, key, initializationVector));
+        System.out.println("Encrypted: " + cbcCiphertext);
+        String cbcPlaintext =
+          decryptCbc(cbcCiphertext, key, initializationVector);
+        System.out.println("Decrypted: " + cbcPlaintext);
+        System.out.println("");
     }
 
     /**
@@ -49,7 +65,7 @@ public class Main {
         if (isThereAnIncompleteBlock) {
             String incompleteBlock =
                 plaintext.substring(5 * numberOfCompleteBlocks, plaintext.length());
-            // Pad with spaces on the right until the string has length seven,
+            // Pad with spaces on the right until the string has length five,
             // and then replace those spaces with null characters.
             String paddedBlock =
                 String.format("%-5s", incompleteBlock).replace(" ", "\0");
@@ -78,6 +94,7 @@ public class Main {
     public static String decryptEcb(String ciphertext, String key) {
         key = key.replaceAll("\\s", "");
         ciphertext = ciphertext.replaceAll("\\s", "");
+
         int numberOfBlocks = ciphertext.length() / 35;
 
         String plaintext = "";
@@ -90,6 +107,84 @@ public class Main {
         return plaintext;
     }
 
+    /**
+     * Like encryptEcb, but using CBC (cipher block chaining) mode.
+     *
+     * The plaintext should be a string of ASCII characters.
+     *
+     * The key and initialization vector should be strings of 0 and 1.
+     */
+    public static String encryptCbc(String plaintext, String key, String initializationVector) {
+        key = key.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        int numberOfCompleteBlocks = plaintext.length() / 5;
+        boolean isThereAnIncompleteBlock = plaintext.length() % 5 != 0;
+
+        String xorString = initializationVector;
+        String ciphertext = "";
+
+        for(int i=0; i<numberOfCompleteBlocks; i++) {
+            String plaintextBlock = plaintext.substring(5 * i, 5 * (i + 1));
+            plaintextBlock = xorAscii(plaintextBlock, stringOfBitsToAscii(xorString));
+            plaintextBlock = encryptBlock(plaintextBlock, key);
+
+            ciphertext += plaintextBlock;
+            xorString = plaintextBlock;
+        }
+
+        if (isThereAnIncompleteBlock) {
+            String incompleteBlock =
+                plaintext.substring(5 * numberOfCompleteBlocks, plaintext.length());
+            // Pad with spaces on the right until the string has length five,
+            // and then replace those spaces with null characters.
+            String paddedBlock =
+                String.format("%-5s", incompleteBlock).replace(" ", "\0");
+
+            paddedBlock = xorAscii(paddedBlock, stringOfBitsToAscii(xorString));
+            paddedBlock = encryptBlock(paddedBlock, key);
+
+            ciphertext += paddedBlock;
+        }
+
+        return ciphertext;
+    }
+
+    /**
+     * Like decryptEcb, but using CBC (cipher block chaining) mode.
+     *
+     * The ciphertext, key, and initialization vector should all be strings of
+     * 0 and 1.
+     */
+    public static String decryptCbc(
+            String ciphertext,
+            String key,
+            String initializationVector) {
+        key = key.replaceAll("\\s", "");
+        ciphertext = ciphertext.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        int numberOfBlocks = ciphertext.length() / 35;
+
+        String plaintext = "";
+
+        String xorBits = initializationVector;
+        for(int i = 0; i < numberOfBlocks; i++) {
+            String ciphertextBlock = ciphertext.substring(35 * i, 35 * (i + 1));
+            plaintext +=
+                xorAscii(
+                    decryptBlock(ciphertextBlock, key),
+                    stringOfBitsToAscii(xorBits));
+
+            // Keep track of the previous ciphertext block.
+            xorBits = ciphertextBlock;
+        }
+
+        return plaintext;
+    }
+
+
+
 
     /**
      * Encrypt a block of plaintext.
@@ -101,20 +196,7 @@ public class Main {
      * number.) The secret symmetric key for this algorithm.
      */
     private static String encryptBlock(String plaintext, String key) {
-        String plaintextBinary = "";
-
-        for (int i = 0; i < plaintext.length(); i++) {
-            // Since, as a precondition, plaintext only has ASCII characters,
-            // this string will have length at most seven.
-            String binaryDigits = Integer.toBinaryString(plaintext.charAt(i));
-
-            // Pad with zeros on the left until the string is seven digits
-            // long.
-            // (This part is a bit messy 🙃)
-            String binaryDigitsPadded =
-                String.format("%7s", binaryDigits).replace(" ", "0");
-            plaintextBinary += binaryDigitsPadded;
-        }
+        String plaintextBinary = asciiToStringOfBits(plaintext);
 
         // Shift right by 3
         String plaintextAfterShift =
@@ -128,25 +210,12 @@ public class Main {
     private static String decryptBlock(String encryptedText, String key) {
         String plaintextAfterShift = xor(encryptedText, key);
 
-        String plaintextBinary = plaintextAfterShift.substring(3, plaintextAfterShift.length())
-        + plaintextAfterShift.substring(0, 3);
+        String plaintextBinary =
+            plaintextAfterShift.substring(3, plaintextAfterShift.length())
+            + plaintextAfterShift.substring(0, 3);
 
-        String[] binaryStrings = new String[5];
-        String tempString = "";
-        for(int i=0; i<plaintextBinary.length(); i++){
-            tempString += plaintextBinary.charAt(i);
-            if((i+1)%7 == 0){
-                binaryStrings[((i+1)/7) - 1] = tempString;
-                tempString = "";
-            }
-        }
 
-        String decryptedBlock = "";
-        char nextChar;
-        for(int i=0; i<binaryStrings.length; i++){
-            nextChar = (char)Integer.parseInt(binaryStrings[i], 2);
-            decryptedBlock += nextChar;
-        }
+        String decryptedBlock = stringOfBitsToAscii(plaintextBinary);
 
         return decryptedBlock;
     }
@@ -171,6 +240,21 @@ public class Main {
     }
 
     /**
+     * Like xor, but the strings and output consist arbitrary ASCII characters,
+     * with each character representing seven bits.
+     *
+     * As a precondition, a an b should have the same length.
+     */
+    private static String xorAscii(String a, String b) {
+        String result = "";
+        for (int i = 0; i < a.length(); i++) {
+            result += (char)(a.charAt(i) ^ b.charAt(i));
+        }
+        return result;
+    }
+
+
+    /**
      * Given a string, add a single space in-between groups of seven
      * characters.
      *
@@ -191,4 +275,68 @@ public class Main {
 
         return result;
     }
+
+    /**
+     * Make a string consisting only of the characters '1' and '0' (that is,
+     * the text representation of a binary number.) Each character is randomly
+     * chosen to be either 1 or 0.
+     *
+     * (Since this is a toy example, we aren't using a
+     * cryptographically-secure pseudorandom number generator for this method,
+     * but in the real world you would want to use something less predictable
+     * than `java.util.Random`.)
+     */
+    private static String randomInitializationVector(int length) {
+        String result = "";
+        for (int i = 0; i < length; i++) {
+            // Add one random bit to the end of the string.
+            result += (new Random()).nextBoolean() ? "1" : "0";
+        }
+        return result;
+    }
+
+    /**
+     * Given a string of ASCII characters, turn each ASCII character into
+     * a seven-bit binary number (big-endian, so that the most significant
+     * bit is on the left).
+     *
+     * Pad each character with zeros so that it's seven bits exactly.
+     */
+    public static String asciiToStringOfBits(String ascii) {
+        String binary = "";
+        for (int i = 0; i < ascii.length(); i++) {
+            // Since, as a precondition, string only has ASCII characters,
+            // this string will have length at most seven.
+            String binaryDigits = Integer.toBinaryString(ascii.charAt(i));
+
+            // Pad with zeros on the left until the string is seven digits
+            // long.
+            // (This part is a bit messy 🙃)
+            String binaryDigitsPadded =
+                String.format("%7s", binaryDigits).replace(" ", "0");
+            binary += binaryDigitsPadded;
+        }
+        return binary;
+    }
+
+    /**
+     * Given a string of '0' and '1' characters, whose length is a multiple of
+     * seven, turn each group of seven '0's and '1's into the corresponding
+     * ASCII character into a seven-bit binary number (big-endian, so that the
+     * most significant bit is on the left).
+     */
+    public static String stringOfBitsToAscii(String bits) {
+        String ascii = "";
+
+        // Because of our precondition that the length of `bits` is a multiple
+        // of seven, it should divide evenly here.
+        String[] groupsOfSeven = groupsOfSeven(bits).split("\\s");
+
+        for (int i = 0; i < groupsOfSeven.length; i++){
+            ascii += (char)Integer.parseInt(groupsOfSeven[i], 2);
+        }
+
+        return ascii;
+    }
+
 }
