@@ -9,7 +9,9 @@ public class Main {
         String key = "1100001 0110101 1011010 0100011 0001001";
         String plaintext = "HelloHello~";
         String initializationVector =
+            // You can use this one in the final submission:
             groupsOfSeven(randomInitializationVector(35));
+            // or you can use this one for testing:
             // "0000000 0000000 0000000 0000000 0000000";
 
 
@@ -25,12 +27,29 @@ public class Main {
         System.out.println("");
 
         System.out.println("=== Cipher Block Chaining mode ===");
-        String cbcCiphertext =
-          groupsOfSeven(encryptCbc(plaintext, key, initializationVector));
+        String cbcCiphertext = groupsOfSeven(encryptCbc(
+            plaintext,
+            key,
+            initializationVector));
         System.out.println("Encrypted: " + cbcCiphertext);
-        String cbcPlaintext =
-          decryptCbc(cbcCiphertext, key, initializationVector);
+        String cbcPlaintext = decryptCbc(
+            cbcCiphertext,
+            key,
+            initializationVector);
         System.out.println("Decrypted: " + cbcPlaintext);
+        System.out.println("");
+
+        System.out.println("=== Output Feedback mode ===");
+        String ofbCiphertext = groupsOfSeven(encryptOfb(
+            plaintext,
+            key,
+            initializationVector));
+        System.out.println("Encrypted: " + ofbCiphertext);
+        String ofbPlaintext = decryptOfb(
+            ofbCiphertext,
+            key,
+            initializationVector);
+        System.out.println("Decrypted: " + ofbPlaintext);
         System.out.println("");
     }
 
@@ -121,16 +140,16 @@ public class Main {
         int numberOfCompleteBlocks = plaintext.length() / 5;
         boolean isThereAnIncompleteBlock = plaintext.length() % 5 != 0;
 
-        String xorString = initializationVector;
+        String xorBits = initializationVector;
         String ciphertext = "";
 
         for(int i=0; i<numberOfCompleteBlocks; i++) {
             String plaintextBlock = plaintext.substring(5 * i, 5 * (i + 1));
-            plaintextBlock = xorAscii(plaintextBlock, stringOfBitsToAscii(xorString));
+            plaintextBlock = xorAscii(plaintextBlock, stringOfBitsToAscii(xorBits));
             plaintextBlock = encryptBlock(plaintextBlock, key);
 
             ciphertext += plaintextBlock;
-            xorString = plaintextBlock;
+            xorBits = plaintextBlock;
         }
 
         if (isThereAnIncompleteBlock) {
@@ -141,7 +160,7 @@ public class Main {
             String paddedBlock =
                 String.format("%-5s", incompleteBlock).replace(" ", "\0");
 
-            paddedBlock = xorAscii(paddedBlock, stringOfBitsToAscii(xorString));
+            paddedBlock = xorAscii(paddedBlock, stringOfBitsToAscii(xorBits));
             paddedBlock = encryptBlock(paddedBlock, key);
 
             ciphertext += paddedBlock;
@@ -171,10 +190,9 @@ public class Main {
         String xorBits = initializationVector;
         for(int i = 0; i < numberOfBlocks; i++) {
             String ciphertextBlock = ciphertext.substring(35 * i, 35 * (i + 1));
-            plaintext +=
-                xorAscii(
-                    decryptBlock(ciphertextBlock, key),
-                    stringOfBitsToAscii(xorBits));
+            plaintext += xorAscii(
+                decryptBlock(ciphertextBlock, key),
+                stringOfBitsToAscii(xorBits));
 
             // Keep track of the previous ciphertext block.
             xorBits = ciphertextBlock;
@@ -183,8 +201,69 @@ public class Main {
         return plaintext;
     }
 
+    /**
+     * Like encryptEcb, but using the OFB (output feedback) mode.
+     *
+     * The plaintext should be a string of ASCII characters.
+     *
+     * The key and initialization vector should be strings of 0 and 1.
+     */
+    public static String encryptOfb(
+            String plaintext,
+            String key,
+            String initializationVector) {
+        key = key.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
 
+        int numberOfCompleteBlocks = plaintext.length() / 5;
+        boolean isThereAnIncompleteBlock = plaintext.length() % 5 != 0;
 
+        String xorBits = initializationVector;
+        String ciphertext = "";
+
+        for (int i = 0; i < numberOfCompleteBlocks; i++) {
+            String plaintextBlock = plaintext.substring(5 * i, 5 * (i + 1));
+
+            xorBits = encryptBlock(stringOfBitsToAscii(xorBits), key);
+            ciphertext += xor(asciiToStringOfBits(plaintextBlock), xorBits);
+        }
+
+        if (isThereAnIncompleteBlock) {
+            String incompleteBlock = plaintext.substring(
+                5 * numberOfCompleteBlocks,
+                plaintext.length());
+
+            // We don't need all 35 xor bits, just enough of them to encrypt
+            // each ASCII character in `incompleteBlock`. (7 bits per
+            // character.)
+            xorBits = encryptBlock(stringOfBitsToAscii(xorBits), key)
+                .substring(0, incompleteBlock.length() * 7);
+
+            ciphertext += xor(asciiToStringOfBits(incompleteBlock), xorBits);
+        }
+
+        return ciphertext;
+    }
+
+    /**
+     * Like decryptEcb, but using CBC (cipher block chaining) mode.
+     *
+     * The ciphertext, key, and initialization vector should all be strings of
+     * 0 and 1.
+     */
+    public static String decryptOfb(
+            String ciphertext,
+            String key,
+            String initializationVector) {
+        key = key.replaceAll("\\s", "");
+        ciphertext = ciphertext.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        return stringOfBitsToAscii(encryptOfb(
+            stringOfBitsToAscii(ciphertext),
+            key,
+            initializationVector));
+    }
 
     /**
      * Encrypt a block of plaintext.
@@ -194,6 +273,9 @@ public class Main {
      * @param key A string consisting solely of the characters '1' and '0', 35
      * characters long. (That is, the string representation of a binary
      * number.) The secret symmetric key for this algorithm.
+     *
+     * @return A string of '1's and '0's, 35 characters long; the encrypted
+     * block.
      */
     private static String encryptBlock(String plaintext, String key) {
         String plaintextBinary = asciiToStringOfBits(plaintext);
@@ -207,6 +289,18 @@ public class Main {
         return encryptedBlock;
     }
 
+    /**
+     * Decrypt a block of plaintext.
+     *
+     * @param encryptedText A string of '1's and '0's, 35 characters long;
+     * a block of ciphertext to be decrypted.
+     *
+     * @param key A string consisting solely of the characters '1' and '0', 35
+     * characters long. (That is, the string representation of a binary
+     * number.) The secret symmetric key for this algorithm.
+     *
+     * @param 5 characters of ASCII; the decrypted block.
+     */
     private static String decryptBlock(String encryptedText, String key) {
         String plaintextAfterShift = xor(encryptedText, key);
 
@@ -240,8 +334,8 @@ public class Main {
     }
 
     /**
-     * Like xor, but the strings and output consist arbitrary ASCII characters,
-     * with each character representing seven bits.
+     * Like `xor()`, but the input and output strings consist arbitrary ASCII
+     * characters, with each character representing seven bits.
      *
      * As a precondition, a an b should have the same length.
      */
