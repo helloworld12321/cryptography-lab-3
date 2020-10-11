@@ -32,6 +32,15 @@ public class Main {
           decryptCbc(cbcCiphertext, key, initializationVector);
         System.out.println("Decrypted: " + cbcPlaintext);
         System.out.println("");
+
+        System.out.println("=== Cipher Feedback mode ===");
+        String cfbCiphertext =
+          groupsOfSeven(encryptCfb(plaintext, key, initializationVector));
+        System.out.println("Encrypted: " + cfbCiphertext);
+        String cfbPlaintext =
+          decryptCfb(cfbCiphertext, key, initializationVector);
+        System.out.println("Decrypted: " + cfbPlaintext);
+        System.out.println("");
     }
 
     /**
@@ -183,7 +192,64 @@ public class Main {
         return plaintext;
     }
 
+    public static String encryptCfb(
+        String plaintext, 
+        String key, 
+        String initializationVector) {
+        
+        key = key.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
 
+        int numberOfCompleteBlocks = plaintext.length() / 5;
+        boolean isThereAnIncompleteBlock = plaintext.length() % 5 != 0;
+
+        String xorString = initializationVector;
+        String ciphertext = "";
+        for(int i=0; i<numberOfCompleteBlocks; i++){
+            String plaintextBlock = plaintext.substring(5 * i, 5 * (i + 1));
+            xorString = encryptBlock(stringOfBitsToAscii(xorString), key);
+            xorString = xor(asciiToStringOfBits(plaintextBlock), xorString);
+
+            ciphertext += xorString;
+        }
+
+        if (isThereAnIncompleteBlock) {
+            String incompleteBlock =
+                plaintext.substring(5 * numberOfCompleteBlocks, plaintext.length());
+            // Pad with spaces on the right until the string has length five,
+            // and then replace those spaces with null characters.
+            String paddedBlock =
+                String.format("%-5s", incompleteBlock).replace(" ", "\0");
+
+            xorString = encryptBlock(stringOfBitsToAscii(xorString), key);
+            xorString = xor(asciiToStringOfBits(paddedBlock), xorString);
+
+            ciphertext += xorString;
+        }
+
+        return ciphertext;
+    }
+
+    public static String decryptCfb(String ciphertext, String key, String initializationVector){
+        key = key.replaceAll("\\s", "");
+        ciphertext = ciphertext.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        int numberOfBlocks = ciphertext.length() / 35;
+       
+        String xorString = initializationVector;
+        String plaintext = "";
+        for(int i=0; i<numberOfBlocks; i++) {
+            String cipherTextBlock = ciphertext.substring(5 * i, 5 * (i + 1));
+            xorString = encryptBlock(stringOfBitsToAscii(xorString), key);
+            xorString = xor(cipherTextBlock, xorString);
+
+            plaintext += xorString;
+            xorString = cipherTextBlock;
+        }
+
+        return plaintext;
+    }
 
 
     /**
