@@ -98,10 +98,10 @@ public class Main {
         if (isThereAnIncompleteBlock) {
             String incompleteBlock =
                 plaintext.substring(5 * numberOfCompleteBlocks, plaintext.length());
-            // Pad with spaces on the right until the string has length five,
-            // and then replace those spaces with null characters.
-            String paddedBlock =
-                String.format("%-5s", incompleteBlock).replace(" ", "\0");
+
+            // Add null characters on the right so that the block has five
+            // characters in it (or 35 bits).
+            String paddedBlock = rightPad(incompleteBlock, 5, '\0');
 
             ciphertext += encryptBlock(paddedBlock, key);
         }
@@ -169,10 +169,10 @@ public class Main {
         if (isThereAnIncompleteBlock) {
             String incompleteBlock =
                 plaintext.substring(5 * numberOfCompleteBlocks, plaintext.length());
-            // Pad with spaces on the right until the string has length five,
-            // and then replace those spaces with null characters.
-            String paddedBlock =
-                String.format("%-5s", incompleteBlock).replace(" ", "\0");
+
+            // Add null characters on the right so that the block has five
+            // characters in it (or 35 bits).
+            String paddedBlock = rightPad(incompleteBlock, 5, '\0');
 
             paddedBlock = xorAscii(paddedBlock, stringOfBitsToAscii(xorBits));
             paddedBlock = encryptBlock(paddedBlock, key);
@@ -203,7 +203,9 @@ public class Main {
 
         String xorBits = initializationVector;
         for(int i = 0; i < numberOfBlocks; i++) {
-            String ciphertextBlock = ciphertext.substring(35 * i, 35 * (i + 1));
+            String ciphertextBlock =
+                ciphertext.substring(35 * i, 35 * (i + 1));
+
             plaintext += xorAscii(
                 decryptBlock(ciphertextBlock, key),
                 stringOfBitsToAscii(xorBits));
@@ -313,10 +315,9 @@ public class Main {
 
             String counterBits = Integer.toBinaryString(counter);
 
-            // Pad the counter bits with 0s on the right to make it 16 bits
+            // Pad the counter bits with 0s on the left to make it 16 bits
             // long.
-            String paddedCounterBits =
-                String.format("%-16s", counterBits).replace(" ", "0");
+            String paddedCounterBits = leftPad(counterBits, 16, '0');
 
             String xorBits = encryptBlock(
                 stringOfBitsToAscii(initializationVector + paddedCounterBits),
@@ -334,8 +335,7 @@ public class Main {
 
             String counterBits = Integer.toBinaryString(counter);
 
-            String paddedCounterBits =
-                String.format("%-16s", counterBits).replace(" ", "0");
+            String paddedCounterBits = leftPad(counterBits, 16, '0');
 
             // We don't need all 35 xor bits, just enough of them to encrypt
             // each ASCII character in `incompleteBlock`. (7 bits per
@@ -522,9 +522,7 @@ public class Main {
 
             // Pad with zeros on the left until the string is seven digits
             // long.
-            // (This part is a bit messy 🙃)
-            String binaryDigitsPadded =
-                String.format("%7s", binaryDigits).replace(" ", "0");
+            String binaryDigitsPadded = leftPad(binaryDigits, 7, '0');
             binary += binaryDigitsPadded;
         }
         return binary;
@@ -550,4 +548,35 @@ public class Main {
         return ascii;
     }
 
+    /**
+     * Given a string with fewer than `desiredLength` characters, add one or
+     * more instances of `paddingCharacter` on the left side until the string
+     * has exactly `desiredLength` characters.
+     *
+     * (If the original string already has `desiredLength` characters, or if
+     * it's longer than `desiredLength`, the original string will be returned
+     * unchanged.)
+     */
+    public static String leftPad(
+            String s,
+            int desiredLength,
+            char paddingCharacter) {
+        while (s.length() < desiredLength) {
+            s = paddingCharacter + s;
+        }
+        return s;
+    }
+
+    /**
+     * Like leftPad(), but add the padding character to the right side.
+     */
+    public static String rightPad(
+            String s,
+            int desiredLength,
+            char paddingCharacter) {
+        while (s.length() < desiredLength) {
+            s += paddingCharacter;
+        }
+        return s;
+    }
 }
