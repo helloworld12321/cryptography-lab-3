@@ -8,15 +8,16 @@ public class Main {
         // TODO
         String key = "1100001 0110101 1011010 0100011 0001001";
         String plaintext = "HelloHello~";
-        String initializationVector =
-            // You can use this one in the final submission:
-            groupsOfSeven(randomInitializationVector(35));
-            // or you can use this one for testing:
-            // "0000000 0000000 0000000 0000000 0000000";
+        String initializationVector = randomInitializationVector(35);
+        String ctrInitializationVector = initializationVector.substring(0, 19);
 
+        initializationVector = groupsOfSeven(initializationVector);
+        ctrInitializationVector = groupsOfSeven(ctrInitializationVector);
 
         System.out.println("Plaintext: " + plaintext);
         System.out.println("Initialization vector: " + initializationVector);
+        System.out.println(
+            "Counter-mode initialization vector: " + ctrInitializationVector);
         System.out.println("");
 
         System.out.println("=== Electronic Code Book mode ===");
@@ -50,6 +51,19 @@ public class Main {
             key,
             initializationVector);
         System.out.println("Decrypted: " + ofbPlaintext);
+        System.out.println("");
+
+        System.out.println("=== Counter mode ===");
+        String ctrCiphertext = groupsOfSeven(encryptCtr(
+            plaintext,
+            key,
+            ctrInitializationVector));
+        System.out.println("Encrypted: " + ctrCiphertext);
+        String ctrPlaintext = decryptCtr(
+            ctrCiphertext,
+            key,
+            ctrInitializationVector);
+        System.out.println("Decrypted: " + ctrPlaintext);
         System.out.println("");
     }
 
@@ -246,7 +260,7 @@ public class Main {
     }
 
     /**
-     * Like decryptEcb, but using CBC (cipher block chaining) mode.
+     * Like decryptEcb, but using OFB (output feedback) mode.
      *
      * The ciphertext, key, and initialization vector should all be strings of
      * 0 and 1.
@@ -260,6 +274,109 @@ public class Main {
         initializationVector = initializationVector.replaceAll("\\s", "");
 
         return stringOfBitsToAscii(encryptOfb(
+            stringOfBitsToAscii(ciphertext),
+            key,
+            initializationVector));
+    }
+
+    /**
+     * Like encryptEcb, but using the CTR (counter) mode.
+     *
+     * The plaintext should be a string of ASCII characters.
+     *
+     * The key and initialization vector should be strings of 0 and 1.
+     *
+     * The key should be 35 bits long.
+     *
+     * The initialization should be 19 bits long (*NOT* 35).
+     *
+     * (Whitespace characters are ignored in the key and the IV.)
+     */
+    public static String encryptCtr(
+            String plaintext,
+            String key,
+            String initializationVector) {
+        key = key.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        int numberOfCompleteBlocks = plaintext.length() / 5;
+        boolean isThereAnIncompleteBlock = plaintext.length() % 5 != 0;
+
+        String ciphertext = "";
+
+        // We'll store the counter in an `int` variable for clarity, but note
+        // that we'll only be using the first 16 bits.
+        int counter = 0;
+
+        for (int i = 0; i < numberOfCompleteBlocks; i++) {
+            String plaintextBlock = plaintext.substring(5 * i, 5 * (i + 1));
+
+            String counterBits = Integer.toBinaryString(counter);
+
+            // Pad the counter bits with 0s on the right to make it 16 bits
+            // long.
+            String paddedCounterBits =
+                String.format("%-16s", counterBits).replace(" ", "0");
+
+            String xorBits = encryptBlock(
+                stringOfBitsToAscii(initializationVector + paddedCounterBits),
+                key);
+
+            ciphertext += xor(asciiToStringOfBits(plaintextBlock), xorBits);
+
+            // If the counter reaches 2^16, wrap it back to 0.
+            counter = (counter + 1) % 0b1_0000_0000_0000_0000;
+        }
+
+        if (isThereAnIncompleteBlock) {
+            String incompleteBlock =
+                plaintext.substring(5 * numberOfCompleteBlocks, plaintext.length());
+
+            String counterBits = Integer.toBinaryString(counter);
+
+            String paddedCounterBits =
+                String.format("%-16s", counterBits).replace(" ", "0");
+
+            // We don't need all 35 xor bits, just enough of them to encrypt
+            // each ASCII character in `incompleteBlock`. (7 bits per
+            // character.)
+            String xorBits =
+                encryptBlock(
+                    stringOfBitsToAscii(initializationVector + paddedCounterBits),
+                    key)
+                .substring(0, incompleteBlock.length() * 7);
+
+            ciphertext += xor(asciiToStringOfBits(incompleteBlock), key);
+        }
+
+        return ciphertext;
+    }
+
+    /**
+     * Like decryptEcb, but using CTR (counter) mode.
+     *
+     * The ciphertext, key, and initialization vector should all be strings of
+     * 0 and 1.
+     *
+     *
+     * The length ciphertext must be a multiple of seven.
+     *
+     * The key should be 35 bits long.
+     *
+     * The initialization should be 19 bits long (*NOT* 35).
+     *
+     * (Whitespace characters are ignored in the ciphertext, the key, and the
+     * IV.)
+     */
+    public static String decryptCtr(
+            String ciphertext,
+            String key,
+            String initializationVector) {
+        key = key.replaceAll("\\s", "");
+        ciphertext = ciphertext.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        return stringOfBitsToAscii(encryptCtr(
             stringOfBitsToAscii(ciphertext),
             key,
             initializationVector));
