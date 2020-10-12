@@ -1,79 +1,295 @@
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.Arrays;
 import java.util.Random;
+import java.util.Scanner;
 
 /**
  * This is a toy block cipher. It's not actually secure :)
  */
 public class Main {
+    @SuppressWarnings("unchecked")
     public static void main(String[] args) {
-        // TODO
-        String key = "1100001 0110101 1011010 0100011 0001001";
-        String plaintext = "HelloHello~";
-        String initializationVector = randomInitializationVector(35);
-        String ctrInitializationVector = initializationVector.substring(0, 19);
+        MenuSystem menus = new MenuSystem(System.out, System.in);
 
-        initializationVector = groupsOfSeven(initializationVector);
-        ctrInitializationVector = groupsOfSeven(ctrInitializationVector);
+        menus.message("Welcome to Lab 3!");
 
-        System.out.println("Plaintext: " + plaintext);
-        System.out.println("Initialization vector: " + initializationVector);
-        System.out.println(
-            "Counter-mode initialization vector: " + ctrInitializationVector);
-        System.out.println("");
+        String encryptOrDecrypt;
+        try {
+            String[] options = {"encrypt", "decrypt"};
+            int choice = menus.choice(
+                "Would you like to encrypt or decrypt?",
+                options);
 
-        System.out.println("=== Electronic Code Book mode ===");
-        String ecbCiphertext = groupsOfSeven(encryptEcb(plaintext, key));
-        System.out.println("Encrypted: " + ecbCiphertext);
-        String ecbPlaintext = decryptEcb(ecbCiphertext, key);
-        System.out.println("Decrypted: " + ecbPlaintext);
-        System.out.println("");
+            encryptOrDecrypt = options[choice];
+        } catch (EofException e) {
+            System.exit(0);
+            // 🙄
+            throw new RuntimeException("Oh no, System.exit() failed!");
+        }
 
-        System.out.println("=== Cipher Block Chaining mode ===");
-        String cbcCiphertext = groupsOfSeven(encryptCbc(
-            plaintext,
-            key,
-            initializationVector));
-        System.out.println("Encrypted: " + cbcCiphertext);
-        String cbcPlaintext = decryptCbc(
-            cbcCiphertext,
-            key,
-            initializationVector);
-        System.out.println("Decrypted: " + cbcPlaintext);
-        System.out.println("");
+        Mode mode;
+        String[] modeOptions = Arrays.stream(Mode.values())
+            .map(Mode::toString)
+            .toArray(String[]::new);
+        try {
+            int choice = menus.choice(
+                "What mode would you like to encrypt with?",
+                modeOptions);
 
-        System.out.println("=== Cipher Feedback mode ===");
-        String cfbCiphertext =
-          groupsOfSeven(encryptCfb(plaintext, key, initializationVector));
-        System.out.println("Encrypted: " + cfbCiphertext);
-        String cfbPlaintext =
-          decryptCfb(cfbCiphertext, key, initializationVector);
-        System.out.println("Decrypted: " + cfbPlaintext);
-        System.out.println("");
+            mode = Mode.values()[choice];
+        } catch (EofException e) {
+            System.exit(0);
+            throw new RuntimeException("Oh no, System.exit() failed!");
+        }
 
-        System.out.println("=== Output Feedback mode ===");
-        String ofbCiphertext = groupsOfSeven(encryptOfb(
-            plaintext,
-            key,
-            initializationVector));
-        System.out.println("Encrypted: " + ofbCiphertext);
-        String ofbPlaintext = decryptOfb(
-            ofbCiphertext,
-            key,
-            initializationVector);
-        System.out.println("Decrypted: " + ofbPlaintext);
-        System.out.println("");
 
-        System.out.println("=== Counter mode ===");
-        String ctrCiphertext = groupsOfSeven(encryptCtr(
-            plaintext,
-            key,
-            ctrInitializationVector));
-        System.out.println("Encrypted: " + ctrCiphertext);
-        String ctrPlaintext = decryptCtr(
-            ctrCiphertext,
-            key,
-            ctrInitializationVector);
-        System.out.println("Decrypted: " + ctrPlaintext);
-        System.out.println("");
+        if (encryptOrDecrypt.equals("encrypt")) {
+            promptForEncryption(menus, mode);
+        } else {
+            promptForDecryption(menus, mode);
+        }
+    }
+
+    /**
+     * Encrypt a ciphertext interactively.
+     */
+    @SuppressWarnings("unchecked")
+    public static void promptForEncryption(MenuSystem menus, Mode mode) {
+        menus.message("Encrypting with " + mode.shortName);
+
+        boolean shouldUseRandomKey;
+        try {
+            String[] options = { "y", "n" };
+            int choice = menus.choice(
+                "Would you like to use a random key?",
+                options);
+            shouldUseRandomKey = options[choice].equals("y");
+        } catch (EofException e) {
+            System.exit(0);
+            throw new RuntimeException("Oh no, System.exit() failed!");
+        }
+
+        String key;
+        if (shouldUseRandomKey) {
+            key = randomStringOfBits(35);
+            menus.message("Using key " + key);
+        } else {
+            try {
+                Validator<String>[] validators = new Validator[] {
+                    Validator.isBinaryString,
+                    Validator.hasLengthIgnoringWhitespace(35),
+                };
+                key = menus.getLine(
+                    "Please enter the key (as a string of 1s and 0s, "
+                        + "length 35)",
+                    validators);
+            } catch (EofException e) {
+                System.exit(0);
+                throw new RuntimeException("Oh no, System.exit() failed!");
+            }
+        }
+
+        String initializationVector;
+        if (mode.needsInitializationVector) {
+            boolean shouldUseRandomIv;
+            try {
+                String[] options = { "y", "n" };
+                int choice = menus.choice(
+                    "Would you like to use a random initialization vector?",
+                    options);
+                shouldUseRandomIv = options[choice].equals("y");
+            } catch (EofException e) {
+                System.exit(0);
+                throw new RuntimeException("Oh no, System.exit() failed!");
+            }
+
+            if (shouldUseRandomIv) {
+                initializationVector =
+                    randomStringOfBits(mode.initializationVectorLength);
+                menus.message(
+                    "Using initialization vector " + initializationVector);
+            } else {
+                String message = String.format(
+                    "Please enter the initialization vector (as a string of "
+                        + "1s and 0s, length %d)",
+                    mode.initializationVectorLength);
+                Validator<String>[] validators = new Validator[] {
+                    Validator.isBinaryString,
+                    Validator.hasLengthIgnoringWhitespace(
+                        mode.initializationVectorLength),
+                };
+                try {
+                    initializationVector = menus.getLine(message, validators);
+                } catch (EofException e) {
+                    System.exit(0);
+                    throw new RuntimeException("Oh no, System.exit() failed!");
+                }
+            }
+        } else {
+            initializationVector = null;
+        }
+
+        String plaintext;
+        try {
+            Validator<String>[] validators = new Validator[] {
+                Validator.isAFileWhoseContentsMatch(new Validator[] {
+                    Validator.isAscii,
+                }),
+            };
+            String plaintextFilePath = menus.getLine(
+                "Please enter a path to the file containing the "
+                    + "plaintext.\n"
+                    + "The plaintext should consist entirely of ASCII "
+                    + "characters.)",
+                validators);
+            plaintext = contentsOf(plaintextFilePath);
+        } catch (EofException e) {
+            System.exit(0);
+            throw new RuntimeException("Oh no, System.exit() failed!");
+        }
+
+        menus.message(
+            "Encrypted text: "
+                + mode.encrypt(plaintext, key, initializationVector));
+    }
+
+    /**
+     * Decrypt a ciphertext interactively.
+     */
+    @SuppressWarnings("unchecked")
+    public static void promptForDecryption(MenuSystem menus, Mode mode) {
+        menus.message("Decrypting with " + mode.shortName);
+
+        String key;
+        try {
+            Validator<String>[] validators = new Validator[] {
+                Validator.isBinaryString,
+                Validator.hasLengthIgnoringWhitespace(35),
+            };
+            key = menus.getLine(
+                "Please enter the key (as a string of 1s and 0s, length 35)",
+                validators);
+        } catch (EofException e) {
+            System.exit(0);
+            throw new RuntimeException("Oh no, System.exit() failed!");
+        }
+
+        String initializationVector;
+        if (mode.needsInitializationVector) {
+            String message = String.format(
+                "Please enter the initialization vector (as a string of 1s "
+                    + "and 0s, length %d)",
+                mode.initializationVectorLength);
+            Validator<String>[] validators = new Validator[] {
+                Validator.isBinaryString,
+                Validator.hasLengthIgnoringWhitespace(
+                    mode.initializationVectorLength),
+            };
+            try {
+                initializationVector = menus.getLine(message, validators);
+            } catch (EofException e) {
+                System.exit(0);
+                throw new RuntimeException("Oh no, System.exit() failed!");
+            }
+        } else {
+            initializationVector = null;
+        }
+
+        String ciphertext;
+        try {
+            Validator<String>[] validators = new Validator[] {
+                Validator.isAFileWhoseContentsMatch(new Validator[] {
+                    Validator.isBinaryString,
+                }),
+            };
+            String ciphertextFilePath = menus.getLine(
+                "Please enter the path to the file containing the "
+                    + "ciphertext.\n"
+                    + "(The ciphertext should be a string of 1s and 0s)",
+                validators);
+            ciphertext = contentsOf(ciphertextFilePath);
+        } catch (EofException e) {
+            System.exit(0);
+            throw new RuntimeException("Oh no, System.exit() failed!");
+        }
+
+        menus.message(
+            "Decrypted text: "
+                + mode.decrypt(ciphertext, key, initializationVector));
+    }
+
+
+    public static enum Mode {
+        ECB("ECB", "electronic codebook", false, null),
+        CBC("CBC", "cipher block chaining", true, 35),
+        CFB("CFB", "cipher feedback", true, 35),
+        OFB("OFB", "output feedback", true, 35),
+        CTR("CTR", "counter", true, 19);
+
+        String shortName;
+        String longName;
+        boolean needsInitializationVector;
+        // If needsInitializationVector is false, this field should be set to
+        // null.
+        Integer initializationVectorLength;
+
+        Mode(
+                String shortName,
+                String longName,
+                boolean needsInitializationVector,
+                Integer initializationVectorLength) {
+            this.shortName = shortName;
+            this.longName = longName;
+            this.needsInitializationVector = needsInitializationVector;
+            this.initializationVectorLength = initializationVectorLength;
+        }
+
+        public String toString() {
+            return String.format("%s (%s)", shortName, longName);
+        }
+
+        // If this mode doesn't need an initialization vector, just pass
+        // null as a parameter.
+        public String encrypt(
+                String plaintext,
+                String key,
+                String initializationVector) {
+            switch (this) {
+                case ECB:
+                    return encryptEcb(plaintext, key);
+                case CBC:
+                    return encryptCbc(plaintext, key, initializationVector);
+                case CFB:
+                    return encryptCfb(plaintext, key, initializationVector);
+                case OFB:
+                    return encryptOfb(plaintext, key, initializationVector);
+                case CTR:
+                    return encryptCtr(plaintext, key, initializationVector);
+            }
+            throw new RuntimeException("Unrecognized mode " + this);
+        }
+
+        // If this mode doesn't need an initialization vector, just pass
+        // null as a parameter.
+        public String decrypt(
+                String ciphertext,
+                String key,
+                String initializationVector) {
+            switch (this) {
+                case ECB:
+                    return decryptEcb(ciphertext, key);
+                case CBC:
+                    return decryptCbc(ciphertext, key, initializationVector);
+                case CFB:
+                    return decryptCfb(ciphertext, key, initializationVector);
+                case OFB:
+                    return decryptOfb(ciphertext, key, initializationVector);
+                case CTR:
+                    return decryptCtr(ciphertext, key, initializationVector);
+            }
+            throw new RuntimeException("Unrecognized mode " + this);
+        }
     }
 
     /**
@@ -589,7 +805,7 @@ public class Main {
      * but in the real world you would want to use something less predictable
      * than `java.util.Random`.)
      */
-    private static String randomInitializationVector(int length) {
+    private static String randomStringOfBits(int length) {
         String result = "";
         for (int i = 0; i < length; i++) {
             // Add one random bit to the end of the string.
@@ -670,5 +886,26 @@ public class Main {
             s += paddingCharacter;
         }
         return s;
+    }
+
+    /**
+     * Return the contents of a file.
+     *
+     * @throws RuntimeException if literally anything goes wrong
+     */
+    public static String contentsOf(String filePath) {
+        try {
+            Scanner scanner = new Scanner(new File(filePath));
+
+            // Read character by character.
+            scanner.useDelimiter("");
+            StringBuilder builder = new StringBuilder();
+            while (scanner.hasNext()) {
+                builder.append(scanner.next());
+            }
+            return builder.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Uffda", e);
+        }
     }
 }
