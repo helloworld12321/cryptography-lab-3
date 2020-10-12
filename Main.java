@@ -152,7 +152,6 @@ public class Main {
         menus.message(
             "Encrypted text: "
                 + mode.encrypt(plaintext, key, initializationVector));
-
     }
 
     /**
@@ -442,6 +441,89 @@ public class Main {
 
             // Keep track of the previous ciphertext block.
             xorBits = ciphertextBlock;
+        }
+
+        return plaintext;
+    }
+
+    public static String encryptCfb(
+        String plaintext,
+        String key,
+        String initializationVector) {
+        key = key.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        int numberOfCompleteBlocks = plaintext.length() / 5;
+        boolean isThereAnIncompleteBlock = plaintext.length() % 5 != 0;
+
+        String xorBits = initializationVector;
+        String ciphertext = "";
+
+        for(int i=0; i<numberOfCompleteBlocks; i++){
+            String plaintextBlock = plaintext.substring(5 * i, 5 * (i + 1));
+
+            xorBits = encryptBlock(stringOfBitsToAscii(xorBits), key);
+            xorBits = xor(asciiToStringOfBits(plaintextBlock), xorBits);
+
+            ciphertext += xorBits;
+        }
+
+        if (isThereAnIncompleteBlock) {
+            String incompleteBlock =
+                plaintext.substring(5 * numberOfCompleteBlocks, plaintext.length());
+            // We don't need all 35 xor bits, just enough of them to encrypt
+            // each ASCII character in `incompleteBlock`. (7 bits per
+            // character.)
+
+            xorBits = encryptBlock(stringOfBitsToAscii(xorBits), key)
+                .substring(0, incompleteBlock.length() * 7);
+            xorBits = xor(asciiToStringOfBits(incompleteBlock), xorBits);
+
+            ciphertext += xorBits;
+        }
+
+        return ciphertext;
+    }
+
+    public static String decryptCfb(
+            String ciphertext,
+            String key,
+            String initializationVector){
+        key = key.replaceAll("\\s", "");
+        ciphertext = ciphertext.replaceAll("\\s", "");
+        initializationVector = initializationVector.replaceAll("\\s", "");
+
+        int numberOfCompleteBlocks = ciphertext.length() / 35;
+        boolean isThereAnIncompleteBlock = ciphertext.length() % 35 != 0;
+
+        String feedbackBits = initializationVector;
+        String plaintext = "";
+
+        for(int i=0; i<numberOfCompleteBlocks; i++){
+            String ciphertextBlock = ciphertext.substring(35 * i, 35 * (i + 1));
+
+            String xorBits = encryptBlock(
+                stringOfBitsToAscii(feedbackBits),
+                key);
+
+            plaintext += stringOfBitsToAscii(xor(xorBits, ciphertextBlock));
+
+            feedbackBits = ciphertextBlock;
+        }
+
+        if (isThereAnIncompleteBlock) {
+            String incompleteBlock =
+                ciphertext.substring(35 * numberOfCompleteBlocks, ciphertext.length());
+            // We don't need all 35 xor bits, just enough of them to encrypt
+            // each ASCII character in `incompleteBlock`. (7 bits per
+            // character.)
+
+            String xorBits = encryptBlock(
+                    stringOfBitsToAscii(feedbackBits),
+                    key)
+                .substring(0, incompleteBlock.length());
+
+            plaintext += stringOfBitsToAscii(xor(xorBits, incompleteBlock));
         }
 
         return plaintext;
