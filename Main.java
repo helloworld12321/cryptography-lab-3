@@ -261,9 +261,7 @@ public class Main {
                 case CBC:
                     return encryptCbc(plaintext, key, initializationVector);
                 case CFB:
-                    // TODO
-                    // return encryptCfb(ciphertext, key, initializationVector);
-                    throw new RuntimeException("Not implemented yet");
+                    return encryptCfb(plaintext, key, initializationVector);
                 case OFB:
                     return encryptOfb(plaintext, key, initializationVector);
                 case CTR:
@@ -284,9 +282,7 @@ public class Main {
                 case CBC:
                     return decryptCbc(ciphertext, key, initializationVector);
                 case CFB:
-                    // TODO
-                    // return decryptCfb(ciphertext, key, initializationVector);
-                    throw new RuntimeException("Not implemented yet");
+                    return decryptCfb(ciphertext, key, initializationVector);
                 case OFB:
                     return decryptOfb(ciphertext, key, initializationVector);
                 case CTR:
