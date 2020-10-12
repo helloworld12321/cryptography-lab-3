@@ -1,5 +1,8 @@
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.Scanner;
 
 /**
  * This is a toy block cipher. It's not actually secure :)
@@ -130,12 +133,17 @@ public class Main {
         String plaintext;
         try {
             Validator<String>[] validators = new Validator[] {
-                Validator.isAscii,
+                Validator.isAFileWhoseContentsMatch(new Validator[] {
+                    Validator.isAscii,
+                }),
             };
-            plaintext = menus.getLine(
-                "Please enter the plaintext (as a string of ASCII "
-                    + "characters, all on one line).",
+            String plaintextFilePath = menus.getLine(
+                "Please enter a path to the file containing the "
+                    + "plaintext.\n"
+                    + "The plaintext should consist entirely of ASCII "
+                    + "characters.)",
                 validators);
+            plaintext = contentsOf(plaintextFilePath);
         } catch (EofException e) {
             System.exit(0);
             throw new RuntimeException("Oh no, System.exit() failed!");
@@ -192,11 +200,16 @@ public class Main {
         String ciphertext;
         try {
             Validator<String>[] validators = new Validator[] {
-                Validator.isBinaryString,
+                Validator.isAFileWhoseContentsMatch(new Validator[] {
+                    Validator.isBinaryString,
+                }),
             };
-            ciphertext = menus.getLine(
-                "Please enter the ciphertext (as a string of 1s and 0s)",
+            String ciphertextFilePath = menus.getLine(
+                "Please enter the path to the file containing the "
+                    + "ciphertext.\n"
+                    + "(The ciphertext should be a string of 1s and 0s)",
                 validators);
+            ciphertext = contentsOf(ciphertextFilePath);
         } catch (EofException e) {
             System.exit(0);
             throw new RuntimeException("Oh no, System.exit() failed!");
@@ -795,5 +808,26 @@ public class Main {
             s += paddingCharacter;
         }
         return s;
+    }
+
+    /**
+     * Return the contents of a file.
+     *
+     * @throws RuntimeException if literally anything goes wrong
+     */
+    public static String contentsOf(String filePath) {
+        try {
+            Scanner scanner = new Scanner(new File(filePath));
+
+            // Read character by character.
+            scanner.useDelimiter("");
+            StringBuilder builder = new StringBuilder();
+            while (scanner.hasNext()) {
+                builder.append(scanner.next());
+            }
+            return builder.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Uffda", e);
+        }
     }
 }

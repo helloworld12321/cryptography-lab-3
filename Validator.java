@@ -1,4 +1,7 @@
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.Arrays;
+import java.util.Scanner;
 import java.util.function.Predicate;
 
 /**
@@ -36,5 +39,32 @@ public class Validator<T> {
                 "Sorry, I need a string that's %s characters long (ignoring "
                     + "whitespace)",
                 length));
+    }
+
+    public static Validator<String> isAFileWhoseContentsMatch(
+            Validator<String>[] validators) {
+        return new Validator<>(
+            filePath -> {
+                Scanner scanner;
+                try {
+                    scanner = new Scanner(new File(filePath));
+                } catch (FileNotFoundException e) {
+                    return false;
+                }
+
+                // Read character by character.
+                scanner.useDelimiter("");
+                StringBuilder builder = new StringBuilder();
+                while (scanner.hasNext()) {
+                    builder.append(scanner.next());
+                }
+                return allValidate(validators, builder.toString());
+            },
+            "Sorry, I don't understand that file.");
+    }
+
+    public static <U> boolean allValidate(Validator<U>[] validators, U value) {
+        return Arrays.stream(validators)
+            .allMatch(validator -> validator.predicate.test(value));
     }
 }

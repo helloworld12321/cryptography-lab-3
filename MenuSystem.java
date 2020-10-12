@@ -113,6 +113,9 @@ public class MenuSystem {
     /**
      * Get a (non-empty) line of text from the user.
      *
+     * This function may silently fail on lines longer than 4095 characters;
+     * see https://stackoverflow.com/a/18018473
+     *
      * @param validators A list of validators to run against the value the user
      * inputs. If any of the validators fail, the user will be asked to input
      * something else.
@@ -135,7 +138,7 @@ public class MenuSystem {
             // (They probably hit enter accidentally.)
         } while (line.isEmpty());
 
-        while (!allValidate(validators, line)) {
+        while (!Validator.allValidate(validators, line)) {
             final String theLine = line;
 
             Validator<String> firstFailingValidator = Arrays.stream(validators)
@@ -155,10 +158,5 @@ public class MenuSystem {
         }
 
         return line;
-    }
-
-    private static <T> boolean allValidate(Validator<T>[] validators, T value) {
-        return Arrays.stream(validators)
-            .allMatch(validator -> validator.predicate.test(value));
     }
 }
