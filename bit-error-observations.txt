@@ -1,0 +1,7 @@
+Our observations for one-bit errors in our ciphertext. (In each case, we flipped the very first bit of the ciphertext.)
+
+ECB Mode: One block was affected with one character corrupted total.
+CBC Mode: Two blocks were affected with two characters corrupted total.
+CFB Mode: Two blocks were affected with two characters corrupted total.
+OFB Mode: One block was affected with one character corrupted total.
+CTR Mode: One block was affected with one character corrupted total.
